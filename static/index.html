@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Demo mô hình LSTM phát hiện tin nhắn SMS spam">
+  <title>SpamLens · LSTM SMS Classifier</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="SpamLens">
+      <span class="brand-mark">SL</span>
+      <span><strong>SpamLens</strong><small>LSTM classifier</small></span>
+    </a>
+    <nav aria-label="Điều hướng chính">
+      <a href="#predict">Dự đoán</a>
+      <a href="#performance">Hiệu năng</a>
+      <a href="#model">Mô hình</a>
+    </nav>
+    <span class="status"><i></i> Model online</span>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">NATURAL LANGUAGE PROCESSING · LSTM</p>
+        <h1>Phân tích tin nhắn.<br><em>Nhìn thấy rủi ro.</em></h1>
+        <p class="hero-text">Nhập nội dung SMS để mô hình đánh giá xác suất spam, mức rủi ro và các đặc trưng của văn bản trong vài mili giây.</p>
+        <div class="hero-stats" aria-label="Thông số nổi bật">
+          <div><strong id="heroAccuracy">—</strong><span>Accuracy</span></div>
+          <div><strong id="heroAuc">—</strong><span>ROC-AUC</span></div>
+          <div><strong id="heroRows">—</strong><span>Tin nhắn</span></div>
+        </div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="signal-card signal-one"><span>FREE PRIZE</span><b>98.7%</b></div>
+        <div class="signal-card signal-two"><span>MEETING 8PM</span><b>2.1%</b></div>
+        <div class="orb"><span>LSTM</span><small>sequence model</small></div>
+        <svg viewBox="0 0 540 410"><path d="M48 108 C170 32 330 38 478 128"/><path d="M55 294 C180 374 350 352 486 260"/><path d="M100 70 C230 208 316 211 452 324"/></svg>
+      </div>
+    </section>
+
+    <section class="predict-section" id="predict">
+      <div class="section-heading">
+        <div><p class="eyebrow">LIVE INFERENCE</p><h2>Kiểm tra một tin nhắn</h2></div>
+        <p>Mô hình trả về xác suất, không chỉ một nhãn. Bạn có thể thay đổi ngưỡng quyết định để quan sát kết quả.</p>
+      </div>
+
+      <div class="predict-grid">
+        <article class="composer panel">
+          <div class="panel-label"><span>01</span> Nội dung đầu vào</div>
+          <label for="messageInput">Tin nhắn SMS</label>
+          <textarea id="messageInput" maxlength="5000" placeholder="Ví dụ: Congratulations! You won a free prize. Click here now."></textarea>
+          <div class="textarea-meta"><span id="charCount">0 ký tự</span><button id="clearButton" type="button">Xóa nội dung</button></div>
+
+          <div class="threshold-row">
+            <label for="thresholdInput">Ngưỡng phân loại</label>
+            <output id="thresholdValue">0.50</output>
+          </div>
+          <input id="thresholdInput" type="range" min="0.10" max="0.90" step="0.05" value="0.50">
+          <div class="range-labels"><span>Nhạy hơn</span><span>Chặt chẽ hơn</span></div>
+
+          <div class="sample-row">
+            <button class="sample-button" data-sample="Congratulations! You have won a FREE prize worth $1000. Click the link now to claim.">Mẫu spam</button>
+            <button class="sample-button" data-sample="Hi, I will meet you at the library at 3pm tomorrow. See you then!">Mẫu bình thường</button>
+          </div>
+          <button class="primary-button" id="predictButton" type="button"><span>Phân tích tin nhắn</span><b>→</b></button>
+          <p class="error-message" id="errorMessage" role="alert"></p>
+        </article>
+
+        <article class="result panel" id="resultPanel" aria-live="polite">
+          <div class="panel-label"><span>02</span> Kết quả phân tích</div>
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">◎</div>
+            <h3>Đang chờ nội dung</h3>
+            <p>Nhập một tin nhắn và bấm “Phân tích” để xem kết quả chi tiết.</p>
+          </div>
+          <div class="result-content hidden" id="resultContent">
+            <div class="verdict-row">
+              <div><span class="muted">Kết luận</span><h3 id="predictionLabel">—</h3></div>
+              <span class="risk-badge" id="riskBadge">—</span>
+            </div>
+
+            <div class="probability-block">
+              <div class="probability-copy"><span>Xác suất Spam</span><strong id="spamProbability">—</strong></div>
+              <div class="meter"><i id="probabilityBar"></i><span id="thresholdMarker"></span></div>
+              <div class="meter-labels"><span>0%</span><span>Ngưỡng <b id="thresholdLabel">50%</b></span><span>100%</span></div>
+            </div>
+
+            <div class="probability-pair">
+              <div><span>Spam</span><strong id="spamScore">—</strong></div>
+              <div><span>Normal</span><strong id="normalScore">—</strong></div>
+            </div>
+
+            <div class="detail-grid">
+              <div><span>Thời gian xử lý</span><strong id="processingTime">—</strong></div>
+              <div><span>Số từ</span><strong id="wordCount">—</strong></div>
+              <div><span>Chữ số</span><strong id="digitCount">—</strong></div>
+              <div><span>Liên kết</span><strong id="linkCount">—</strong></div>
+            </div>
+            <p class="disclaimer">Kết quả là dự đoán thống kê của mô hình, không phải kết luận tuyệt đối.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="performance-section" id="performance">
+      <div class="section-heading">
+        <div><p class="eyebrow">TEST SET PERFORMANCE</p><h2>Thông số đánh giá chi tiết</h2></div>
+        <p>Các độ đo được tính trên tập kiểm tra độc lập. Thanh dài hơn biểu thị kết quả tốt hơn.</p>
+      </div>
+      <div class="metric-grid" id="metricGrid"></div>
+
+      <div class="analysis-grid">
+        <article class="panel dataset-panel">
+          <div class="panel-label"><span>03</span> Phân bố dữ liệu</div>
+          <div class="donut-wrap">
+            <div class="donut" id="classDonut"><div><strong id="datasetTotal">—</strong><span>Tổng mẫu</span></div></div>
+            <div class="legend">
+              <div><i class="normal-dot"></i><span>Normal</span><strong id="normalCount">—</strong><small id="normalPercent">—</small></div>
+              <div><i class="spam-dot"></i><span>Spam</span><strong id="spamCount">—</strong><small id="spamPercent">—</small></div>
+            </div>
+          </div>
+          <div class="dataset-stats">
+            <div><span>Độ dài trung bình</span><strong id="averageLength">—</strong></div>
+            <div><span>Trung vị</span><strong id="medianLength">—</strong></div>
+            <div><span>Dài nhất</span><strong id="maxLength">—</strong></div>
+          </div>
+        </article>
+
+        <article class="panel explanation-panel">
+          <div class="panel-label"><span>04</span> Ý nghĩa độ đo</div>
+          <dl>
+            <div><dt>Accuracy</dt><dd>Tỷ lệ tất cả tin nhắn được phân loại đúng.</dd></div>
+            <div><dt>Precision</dt><dd>Trong các tin bị báo Spam, bao nhiêu tin thực sự là Spam.</dd></div>
+            <div><dt>Recall</dt><dd>Trong toàn bộ Spam thực tế, mô hình phát hiện được bao nhiêu.</dd></div>
+            <div><dt>F1-score</dt><dd>Mức cân bằng giữa Precision và Recall.</dd></div>
+            <div><dt>ROC-AUC</dt><dd>Khả năng tách Spam và Normal trên mọi ngưỡng quyết định.</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
+
+    <section class="model-section" id="model">
+      <div class="section-heading">
+        <div><p class="eyebrow">MODEL ARCHITECTURE</p><h2>Từ văn bản đến xác suất</h2></div>
+        <p id="modelSummary">Đang tải thông tin kiến trúc…</p>
+      </div>
+      <div class="pipeline" id="modelPipeline"></div>
+      <div class="model-footnotes">
+        <div><span>Framework</span><strong id="framework">—</strong></div>
+        <div><span>Tham số</span><strong id="parameterCount">—</strong></div>
+        <div><span>Kích thước model</span><strong id="modelSize">—</strong></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>SpamLens · LSTM SMS Classification Demo</span><span>TensorFlow + FastAPI</span></footer>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+
